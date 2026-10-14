@@ -1,0 +1,101 @@
+diff --git a/common/common.cpp b/common/common.cpp
+index 695a1bfff..eaf705393 100644
+--- a/common/common.cpp
++++ b/common/common.cpp
+@@ -1250,6 +1250,21 @@ common_init_result::common_init_result(common_params & params, bool model_only)
+ 
+     pimpl->model.reset(model);
+ 
++    // Saina Helm 2 (decision.type helm2) reads one final hidden state per
++    // question. Its backbone is causal, so the prompt runs in ordinary batches.
++    {
++        char arch[128], decision[16];
++        if (llama_model_meta_val_str(model, "general.architecture", arch, sizeof(arch)) >= 0 &&
++                llama_model_meta_val_str(model, (std::string(arch) + ".decision.type").c_str(), decision,
++                                         sizeof(decision)) >= 0 &&
++                std::strcmp(decision, "helm2") == 0) {
++            params.embedding = cparams.embeddings = true;
++            cparams.ctx_type = LLAMA_CONTEXT_TYPE_DECISION;
++            params.pooling_type = cparams.pooling_type = LLAMA_POOLING_TYPE_NONE;
++            params.n_outputs_max = cparams.n_outputs_max = 0; // n_batch
++        }
++    }
++
+     if (model_only) {
+         return;
+     }
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index e2ac37eb7..89b6b7e20 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -7,6 +7,7 @@
+ #include "server-queue.h"
+ #include "server-schema.h"
+ #include "server-stream.h"
++#include "helm2.h"
+ 
+ #include "build-info.h"
+ #include "common.h"
+@@ -419,6 +420,10 @@ struct server_slot {
+         if (!llama_get_memory(ctx_tgt)) {
+             return false;
+         }
++        // Helm 2 collects the hidden states of every batch in order; its backbone is causal.
++        if (!task->score_fields.is_null() && helm2_model(llama_get_model(ctx_tgt))) {
++            return true;
++        }
+         // context can be chunked/split if the pooling type is LAST
+         const auto pooling = llama_pooling_type(ctx_tgt);
+         if (pooling == LLAMA_POOLING_TYPE_LAST) {
+@@ -840,6 +845,7 @@ public:
+     // note: video_params.ffmpeg_bin_dir points into params_base, which outlives this struct
+     mtmd_helper_init_opt init_opt = mtmd_helper_init_opt_default();
+     const llama_vocab * vocab = nullptr;
++    std::unique_ptr<helm2_head> helm2;
+ 
+     server_queue    queue_tasks;
+     server_response queue_results;
+@@ -2165,7 +2171,31 @@ private:
+         queue_results.send(std::move(res));
+     }
+ 
++    // Saina Helm 2: apply the routed head at each question's readout token.
++    void send_helm2_scores(const server_slot & slot) {
++        auto res = std::make_unique<server_task_result_embd>();
++        res->id        = slot.task->id;
++        res->index     = slot.task->index;
++        res->n_tokens  = slot.task->n_tokens();
++        res->res_type  = slot.task->params.res_type;
++        try {
++            if (slot.score_embeddings.size() != size_t(slot.task->n_tokens())) {
++                throw std::runtime_error("decision model did not return every hidden state");
++            }
++            if (!helm2) helm2.reset(new helm2_head(params_base.model.path));
++            res->score_logits = helm2->score(slot.score_embeddings, slot.task->score_fields);
++        } catch (const std::exception & e) {
++            send_error(slot, e.what(), ERROR_TYPE_SERVER);
++            return;
++        }
++        queue_results.send(std::move(res));
++    }
++
+     void send_embedding(const server_slot & slot, const common_batch & batch) {
++        if (!slot.task->score_fields.is_null() && helm2_model(model_tgt)) {
++            send_helm2_scores(slot);
++            return;
++        }
+         auto res = std::make_unique<server_task_result_embd>();
+         res->id        = slot.task->id;
+         res->index     = slot.task->index;
+@@ -4291,6 +4321,11 @@ std::unique_ptr<server_res_generator> server_routes::handle_completions_impl(
+             const json & data,
+             const std::vector<raw_buffer> & files,
+             task_response_type res_type) {
++    if (helm2_model(ctx_server.model_tgt)) {
++        auto res = create_response();
++        res->error(format_error_response("This model requires a decision request", ERROR_TYPE_INVALID_REQUEST));
++        return res;
++    }
+     GGML_ASSERT(type == SERVER_TASK_TYPE_COMPLETION || type == SERVER_TASK_TYPE_INFILL);
+ 
+     auto res = create_response();

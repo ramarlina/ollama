@@ -318,7 +318,14 @@ func (s *llamaServerRunner) scoreFields(ctx context.Context, input ScoreRequest)
 	}
 	fields := make([]ScoreField, len(input.Fields))
 	for i, f := range input.Fields {
-		if f.Type < 0 || f.Type > 2 || len(f.Options) < 2 || len(f.Options) > 26 {
+		if f.Type < 0 || f.Type > 2 {
+			return bad("invalid decision field")
+		}
+		if f.Count != 0 {
+			if len(f.Options) != 0 || f.Count < 2 || f.Count > MaxScoreCandidates {
+				return bad("invalid decision field")
+			}
+		} else if len(f.Options) < 2 || len(f.Options) > 26 {
 			return bad("invalid decision field")
 		}
 		// Map the question and its options from segment indexes to token offsets.
@@ -330,7 +337,7 @@ func (s *llamaServerRunner) scoreFields(ctx context.Context, input ScoreRequest)
 			}
 			spans[j] = [2]int{offsets[start], offsets[end]}
 		}
-		fields[i] = ScoreField{Type: f.Type, Question: spans[0], Options: spans[1:]}
+		fields[i] = ScoreField{Type: f.Type, Question: spans[0], Options: spans[1:], Count: f.Count}
 	}
 	var images []api.ImageData
 	for _, image := range input.Images {

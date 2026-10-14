@@ -1,0 +1,5 @@
+{
+  "general.name": "Saina Helm 2 0.8B",
+  "general.description": "Saina Helm 2 is a decision model for workflow automation. Give it the situation and your questions; it scores every option of every question in one pass, without generating text.",
+  "general.license": "apache-2.0"
+}

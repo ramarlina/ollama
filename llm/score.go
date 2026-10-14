@@ -53,10 +53,15 @@ type ScoreResponse struct {
 // ScoreField identifies a question and its allowed options for a decision head.
 // Spans index ScoreRequest.Segments; the runner maps them to token offsets.
 // Type is 0 for noul, 1 for choice, and 2 for score.
+//
+// A head that reads one readout token per question (Saina Helm 2) sets Count
+// to the number of options instead of option spans; the readout is the last
+// token of Question.
 type ScoreField struct {
 	Type     int      `json:"type"`
 	Question [2]int   `json:"question"`
 	Options  [][2]int `json:"options"`
+	Count    int      `json:"count,omitempty"`
 }
 
 // ScorePointerRow is an independent state/question pair for a pointer head.

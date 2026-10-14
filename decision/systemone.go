@@ -31,7 +31,7 @@ type Compiled struct {
 
 func Compile(req Request, encoding string) (*Compiled, error) {
 	switch encoding {
-	case "", "tev1", "clef", "strands", "helm":
+	case "", "tev1", "clef", "strands", "helm", "helm2":
 	default:
 		return nil, fmt.Errorf("unsupported decision encoding %q", encoding)
 	}
@@ -54,9 +54,12 @@ func Compile(req Request, encoding string) (*Compiled, error) {
 	}
 	var context string
 	var err error
-	if encoding == "clef" {
+	switch encoding {
+	case "clef":
 		context, err = clefContent(req.State)
-	} else {
+	case "helm2":
+		context, err = helm2Content(req.State)
+	default:
 		context, err = content(req.State)
 	}
 	if err != nil {
@@ -74,6 +77,12 @@ func Compile(req Request, encoding string) (*Compiled, error) {
 	}
 	if encoding == "clef" {
 		if err := encodeClef(req, c); err != nil {
+			return nil, err
+		}
+		return c, nil
+	}
+	if encoding == "helm2" {
+		if err := encodeHelm2(req, c); err != nil {
 			return nil, err
 		}
 		return c, nil
