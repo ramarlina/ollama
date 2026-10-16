@@ -1,0 +1,13 @@
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -5556,7 +5556,8 @@
+                     std::string markers;
+                     for (size_t j = 0; j < body.at("images").size(); ++j) markers += mtmd_get_marker(ctx_server.mctx);
+                     auto media_inputs = tokenize_input_prompts(ctx_server.vocab, ctx_server.mctx,
+-                        json{{"prompt_string", markers + "\n"}, {"multimodal_data", body.at("images")}}, true, true, ctx_server.init_opt);
++                        // Saina Helm 2 Omni reads the vision blocks directly before the text, with no separator.
++                        json{{"prompt_string", helm2_model(ctx_server.model_tgt) ? markers : markers + "\n"}, {"multimodal_data", body.at("images")}}, true, true, ctx_server.init_opt);
+                     auto & media = media_inputs[0];
+                     if (text.size() + media.size() > size_t(meta->slot_n_ctx)) throw std::invalid_argument("decision prompt exceeds the model context (input is never truncated)");
+                     server_tokens input(llama_tokens(text.begin(), text.begin() + position), true);

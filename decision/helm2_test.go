@@ -125,10 +125,17 @@ func TestHelm2Limits(t *testing.T) {
 	if _, err := Compile(req, "helm2"); err == nil {
 		t.Error("infinite number accepted")
 	}
+	// Helm 2 Omni: images go in after the chat start, before the instruction, and the slots move one segment on.
 	req.State = json.RawMessage(`"s"`)
 	req.Images = append(req.Images, []byte{1})
-	if _, err := Compile(req, "helm2"); err == nil {
-		t.Error("image accepted")
+	c, err := Compile(req, "helm2")
+	if err != nil {
+		t.Fatalf("image request: %v", err)
+	}
+	r := c.Request
+	if len(r.Images) != 1 || r.ImagePosition != 1 || len(r.Segments) != 3 || r.Segments[0] != helm2ChatStart ||
+		!strings.HasPrefix(r.Segments[1], helm2Instruction) || r.Segments[2] != "\nDecision q0:" || r.Fields[0].Question != [2]int{2, 3} {
+		t.Errorf("unexpected image request layout: %+v", r)
 	}
 }
 

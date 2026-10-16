@@ -70,11 +70,25 @@ func encodeHelm2(req Request, c *Compiled) error {
 	// The chat template trims the message; the content already starts and ends
 	// without whitespace.
 	segments := []string{helm2ChatStart + helm2Instruction + content + helm2ChatEnd}
+	images := len(req.Images) > 0
+	if images {
+		// Helm 2 Omni reads each image as <|vision_start|> image <|vision_end|> at the start of the user turn,
+		// before the text, as saina.prompt.insert_images places them: the images go in at the boundary after the
+		// chat start, and every readout slot moves one segment later.
+		segments = []string{helm2ChatStart, helm2Instruction + content + helm2ChatEnd}
+		for i := range fields {
+			fields[i].Question = [2]int{fields[i].Question[0] + 1, fields[i].Question[1] + 1}
+		}
+	}
 	for i := range fields {
 		// Each slot is tokenized on its own, as in training.
 		segments = append(segments, fmt.Sprintf("\nDecision q%d:", i))
 	}
 	c.Request = llm.ScoreRequest{Segments: segments, Fields: fields}
+	if images {
+		c.Request.Images = req.Images
+		c.Request.ImagePosition = 1
+	}
 	return nil
 }
 

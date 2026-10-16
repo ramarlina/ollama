@@ -188,6 +188,7 @@ type llamaServerLaunchConfig struct {
 	gpuLibs              []string
 	extraEnvs            map[string]string
 	forceNoMMProjOffload bool
+	decisionType         string
 }
 
 func newLlamaServerHTTPClient() *http.Client {
@@ -655,6 +656,11 @@ func appendMMProjArgs(params []string, launch llamaServerLaunchConfig) []string 
 	}
 
 	params = append(params, "--mmproj", launch.projectors[0])
+	// Saina Helm 2 Omni reads images at saina's pixel budget: 65,536 to 1,638,400 pixels, i.e. 64 to 1,600
+	// merged 32x32 patches (llama.cpp's Qwen-VL default is 8 to 4,096).
+	if launch.decisionType == "helm2" {
+		params = append(params, "--image-min-tokens", "64", "--image-max-tokens", "1600")
+	}
 	if disable, reason := launch.mmprojOffloadDisabled(); disable {
 		slog.Info("disabling multimodal projector offload", "reason", reason, "model", launch.modelPath, "projector", launch.projectors[0])
 		params = append(params, "--no-mmproj-offload")
@@ -943,6 +949,7 @@ func NewLlamaServerRunner(
 		numParallel:  numParallel,
 		kvCacheType:  kvCacheType,
 		embedding:    isEmbedding,
+		decisionType: f.KV().String("decision.type"),
 		config:       config,
 		gpus:         slices.Clone(gpus),
 		gpuLibs:      slices.Clone(gpuLibs),

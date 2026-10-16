@@ -32,7 +32,10 @@ original_metadata = Qwen3_5TextModel.set_gguf_parameters
 
 def head_config(model):
     config = json.loads((model.dir_model / 'head-config.json').read_text())
-    if config.get('head_type') != 'routed_residual_v1' or config.get('prompt') != 'shared_context_query_slots_v1':
+    # Helm 2 Omni (shared_multimodal_native_processor_v2) reads the same text prompt; its images arrive through the
+    # multimodal projector (convert it separately with --mmproj).
+    if config.get('head_type') != 'routed_residual_v1' or config.get('prompt') not in (
+            'shared_context_query_slots_v1', 'shared_multimodal_native_processor_v2'):
         raise ValueError('not a Helm 2 checkpoint')
     codes = re.search(r'var helmCodes = strings\.Fields\(`([^`]*)`\)', HELM_GO.read_text()).group(1).split()
     if config['codes'] != codes:

@@ -44,7 +44,7 @@ func Compile(req Request, encoding string) (*Compiled, error) {
 	if len(req.Videos) > 0 {
 		return nil, fmt.Errorf("video inputs are not supported")
 	}
-	if len(req.Images) != 0 && encoding != "clef" {
+	if len(req.Images) != 0 && encoding != "clef" && encoding != "helm2" {
 		return nil, fmt.Errorf("image inputs are not supported by this decision model")
 	}
 	for i, image := range req.Images {
